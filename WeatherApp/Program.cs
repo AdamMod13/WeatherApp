@@ -1,19 +1,16 @@
-﻿using System;
-using System.Diagnostics.Metrics;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Text.Json.Nodes;
-using System.Threading.Tasks;
+﻿using System.Text.Json;
 
-namespace LAB1
+namespace WeatherApp
 {
     internal class Program
     {
         static async Task Main(string[] args)
         {
+            var context = new CityWeathers();
+            Console.WriteLine("Pass country:");
+            string country = Console.ReadLine();
+            Console.WriteLine("Pass city");
+            string city = Console.ReadLine();
             var client = new HttpClient();
             var request = new HttpRequestMessage
             {
@@ -28,7 +25,15 @@ namespace LAB1
             using var response = await client.SendAsync(request);
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(body);
+            var cityWeatherJson = JsonSerializer.Deserialize<CityWeather>(body);
+            context.Weathers.Add(cityWeatherJson);
+            context.SaveChanges();
+
+            var weathers = (from s in context.Weathers select s).ToList<CityWeather>();
+            foreach (var wt in weathers)
+            {
+                Console.WriteLine("ID: {0}, Temp: {1}, Wind speed: {2:0.00}", wt.ID, wt.temp, wt.wind_speed);
+            }
         }
     }
 }
