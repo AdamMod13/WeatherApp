@@ -36,6 +36,11 @@ namespace WindowsFormsApp
             mapControl.Overlays.Add(markersOverlay);
 
             LoadDb();
+            var weathers = (from wt in context.Weathers select wt).ToList<CityWeather>();
+            foreach (CityWeather weather in weathers)
+            {
+                AddWeatherMarkers(weather);
+            }
         }
 
         async private void button1_Click(object sender, EventArgs e)
