@@ -14,6 +14,8 @@ namespace WindowsFormsApp
         public int min_temp { get; set; }
         public int max_temp { get; set;}
         public double wind_speed { get; set; }
+        public double latitude { get; set; }
+        public double longitude { get; set; }   
 
         public override string ToString()
         {
@@ -28,6 +30,11 @@ namespace WindowsFormsApp
             temperaturesList.Add(max_temp);
 
             return temperaturesList;
+        }
+
+        public int GetTemp()
+        {
+            return temp;
         }
 
         public string GetCityName()
@@ -48,6 +55,26 @@ namespace WindowsFormsApp
         public void SetCountryName(string country)
         {
             countryName = country;
+        }
+
+        public void SetLatitude(double lat)
+        {
+            latitude = lat;
+        }
+
+        public void SetLongitude(double longit)
+        {
+            longitude = longit;
+        }
+
+        public double GetLatitude()
+        {
+            return latitude;
+        }
+
+        public double GetLongitude()
+        {
+            return longitude;
         }
 
         public int GetID()

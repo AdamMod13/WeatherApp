@@ -1,24 +1,40 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
 using System.Linq;
 using System.Net.Http;
 using System.Windows.Forms;
 using System.Text.Json;
-using System.Data.Entity;
-using System.Windows.Forms.DataVisualization.Charting;
+using GMap.NET;
+using GMap.NET.MapProviders;
+using GMap.NET.WindowsForms;
+using GMap.NET.WindowsForms.Markers;
+using Newtonsoft.Json.Linq;
+using System.IO;
+using System.Net;
 
 namespace WindowsFormsApp
 {
     public partial class WeatherForm : Form
     {
-        private WeathersTable context;
+        private WeathersTableWithLocation context;
+        private GMapOverlay markersOverlay = new GMapOverlay("markers");
+
         public WeatherForm()
         {
             InitializeComponent();
-            context = new WeathersTable();
+            context = new WeathersTableWithLocation();
+
+            //Ustawienie mapy 
+            mapControl.DragButton = MouseButtons.Left;
+            mapControl.CanDragMap = true;
+            mapControl.MapProvider = GMapProviders.GoogleMap;
+            mapControl.Position = new PointLatLng(52.2297, 21.0122); // Warszawa
+            mapControl.MinZoom = 1;
+            mapControl.MaxZoom = 18;
+            mapControl.Zoom = 5;
+            mapControl.Overlays.Add(markersOverlay);
+
             LoadDb();
         }
 
@@ -26,27 +42,62 @@ namespace WindowsFormsApp
         {
             string country = CountryInput.Text;
             string city = CityInput.Text;
+
+            //Api call for weather in specified city and country
             var client = new HttpClient();
             var request = new HttpRequestMessage
             {
                 Method = HttpMethod.Get,
                 RequestUri = new Uri("https://weather-by-api-ninjas.p.rapidapi.com/v1/weather?city=" + city + "&country=" + country),
                 Headers =
-            {
-                { "X-RapidAPI-Key", "f1d830866bmsh894ef1aad2cc1a0p1a4176jsn801d806796dc" },
-                { "X-RapidAPI-Host", "weather-by-api-ninjas.p.rapidapi.com" },
-            },
+                {
+                    { "X-RapidAPI-Key", "f1d830866bmsh894ef1aad2cc1a0p1a4176jsn801d806796dc" },
+                    { "X-RapidAPI-Host", "weather-by-api-ninjas.p.rapidapi.com" },
+                },
             };
+
+            //Api call for city lat and long
+            var clientLocation = new HttpClient();
+            var requestLocation = new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = new Uri("https://geocoding-by-api-ninjas.p.rapidapi.com/v1/geocoding?city=" + city),
+                Headers =
+                {
+                    { "X-RapidAPI-Key", "f1d830866bmsh894ef1aad2cc1a0p1a4176jsn801d806796dc" },
+                    { "X-RapidAPI-Host", "geocoding-by-api-ninjas.p.rapidapi.com" },
+                },
+            };
+            //Wait for response
             var response = await client.SendAsync(request);
+            var responseLocation = await clientLocation.SendAsync(requestLocation);
+
+            //Are responses successful
+            responseLocation.EnsureSuccessStatusCode();
             response.EnsureSuccessStatusCode();
+
+            //Json to CityWeather class
             var stringResult = await response.Content.ReadAsStringAsync();
             var cityWeatherJson = JsonSerializer.Deserialize<CityWeather>(stringResult);
             cityWeatherJson.SetCityName(city);
             cityWeatherJson.SetCountryName(country);
+
+            //Get long and lat and add to CityWeather class
+            var stringResultLocation = await responseLocation.Content.ReadAsStringAsync();
+            var dataLocation = JArray.Parse(stringResultLocation);
+            cityWeatherJson.SetLatitude(double.Parse(dataLocation[0]["latitude"].ToString()));
+            cityWeatherJson.SetLongitude(double.Parse(dataLocation[0]["longitude"].ToString()));
+
+            //Add to database and save
             context.Weathers.Add(cityWeatherJson);
             context.SaveChanges();
+
+            //Add to ListBox, Chart and Map
             CitiesListChanged(cityWeatherJson);
             AddNewCityToTempChart(cityWeatherJson, city);
+            AddWeatherMarkers(cityWeatherJson);
+
+            //Clear Inputs
             CityInput.Clear();
             CountryInput.Clear();
         }
@@ -54,12 +105,29 @@ namespace WindowsFormsApp
         private void LoadDb()
         {
             var weathers = (from wt in context.Weathers select wt).ToList<CityWeather>();
-            Console.WriteLine(weathers.Count);
+            CitiesList.Items.Clear();
+            foreach (var series in TempChart.Series)
+            {
+                series.Points.Clear();
+            }
             foreach (var wt in weathers)
             {
                 CitiesListChanged(wt);
                 AddNewCityToTempChart(wt, wt.GetCityName());
             }
+        }
+
+        private void AddWeatherMarkers(CityWeather cityWeather)
+        {            
+            //Get lat, long and temperature
+            double lat = cityWeather.GetLatitude();
+            double lon = cityWeather.GetLongitude();
+            int temp = cityWeather.GetTemp();
+
+            //Add new Marker
+            GMarkerGoogle marker = new GMarkerGoogle(new PointLatLng(lat, lon), GMarkerGoogleType.red);
+            marker.ToolTipText = $"{cityWeather.GetCityName()}: {temp}°C";
+            markersOverlay.Markers.Add(marker);         
         }
 
         private void CitiesListChanged(CityWeather cityWeather)
@@ -77,7 +145,6 @@ namespace WindowsFormsApp
 
         private void RefreshChart()
         {
-            TempChart.ChartAreas.Clear();
             LoadDb();
         }
 
@@ -99,12 +166,32 @@ namespace WindowsFormsApp
         private void DeleteButton_Click_1(object sender, EventArgs e)
         {
             var selectedItem = CitiesList.SelectedItem;
-            int selectedItemDbIndex = int.Parse(CitiesList.GetItemText(selectedItem).Substring(0,1));
+            int selectedIndex = CitiesList.Items.IndexOf(selectedItem);
+            int selectedItemDbIndex = int.Parse(CitiesList.GetItemText(selectedItem).Split('.')[0]);
+
+            //Delete selected city marker
+            if (markersOverlay != null)
+            {
+                markersOverlay.Markers.RemoveAt(selectedIndex);
+                mapControl.Overlays.Remove(markersOverlay);
+                mapControl.Overlays.Add(markersOverlay);
+            }
+
+            //Delete selected city from ListBox
             CitiesList.Items.Remove(selectedItem); 
             var s = context.Weathers.First(x => x.ID == selectedItemDbIndex);
+
+            //Delete selected city from database
             context.Weathers.Remove(s);
             context.SaveChanges();
+
+            //Refresh Chart without deleted item
             RefreshChart();
+        }
+
+        private void gMapControl1_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }
