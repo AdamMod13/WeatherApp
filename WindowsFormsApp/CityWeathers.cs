@@ -7,7 +7,7 @@ using System.Data.Entity;
 
 namespace WindowsFormsApp
 {
-    public class WeathersTableWithLocation : System.Data.Entity.DbContext
+    public class WeathersTable : System.Data.Entity.DbContext
     {
         public virtual System.Data.Entity.DbSet<CityWeather> Weathers { get; set; }
     }

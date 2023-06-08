@@ -17,13 +17,13 @@ namespace WindowsFormsApp
 {
     public partial class WeatherForm : Form
     {
-        private WeathersTableWithLocation context;
+        private WeathersTable context;
         private GMapOverlay markersOverlay = new GMapOverlay("markers");
 
         public WeatherForm()
         {
             InitializeComponent();
-            context = new WeathersTableWithLocation();
+            context = new WeathersTable();
 
             //Ustawienie mapy 
             mapControl.DragButton = MouseButtons.Left;
@@ -45,66 +45,84 @@ namespace WindowsFormsApp
 
         async private void button1_Click(object sender, EventArgs e)
         {
-            string country = CountryInput.Text;
-            string city = CityInput.Text;
-
-            //Api call for weather in specified city and country
-            var client = new HttpClient();
-            var request = new HttpRequestMessage
+            try
             {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri("https://weather-by-api-ninjas.p.rapidapi.com/v1/weather?city=" + city + "&country=" + country),
-                Headers =
+                string country = CountryInput.Text;
+                string city = CityInput.Text;
+
+                //Api call for weather in specified city and country
+                var client = new HttpClient();
+                var request = new HttpRequestMessage
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = new Uri("https://weather-by-api-ninjas.p.rapidapi.com/v1/weather?city=" + city + "&country=" + country),
+                    Headers =
                 {
                     { "X-RapidAPI-Key", "f1d830866bmsh894ef1aad2cc1a0p1a4176jsn801d806796dc" },
                     { "X-RapidAPI-Host", "weather-by-api-ninjas.p.rapidapi.com" },
                 },
-            };
+                };
 
-            //Api call for city lat and long
-            var clientLocation = new HttpClient();
-            var requestLocation = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = new Uri("https://geocoding-by-api-ninjas.p.rapidapi.com/v1/geocoding?city=" + city),
-                Headers =
+                //Api call for city lat and long
+                var clientLocation = new HttpClient();
+                var requestLocation = new HttpRequestMessage
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = new Uri("https://geocoding-by-api-ninjas.p.rapidapi.com/v1/geocoding?city=" + city),
+                    Headers =
                 {
                     { "X-RapidAPI-Key", "f1d830866bmsh894ef1aad2cc1a0p1a4176jsn801d806796dc" },
                     { "X-RapidAPI-Host", "geocoding-by-api-ninjas.p.rapidapi.com" },
                 },
-            };
-            //Wait for response
-            var response = await client.SendAsync(request);
-            var responseLocation = await clientLocation.SendAsync(requestLocation);
+                };
+                //Wait for response
+                var response = await client.SendAsync(request);
+                var responseLocation = await clientLocation.SendAsync(requestLocation);
 
-            //Are responses successful
-            responseLocation.EnsureSuccessStatusCode();
-            response.EnsureSuccessStatusCode();
+                //Are responses successful
+                responseLocation.EnsureSuccessStatusCode();
+                response.EnsureSuccessStatusCode();
 
-            //Json to CityWeather class
-            var stringResult = await response.Content.ReadAsStringAsync();
-            var cityWeatherJson = JsonSerializer.Deserialize<CityWeather>(stringResult);
-            cityWeatherJson.SetCityName(city);
-            cityWeatherJson.SetCountryName(country);
+                //Json to CityWeather class
+                var stringResult = await response.Content.ReadAsStringAsync();
+                var cityWeatherJson = JsonSerializer.Deserialize<CityWeather>(stringResult);
+                cityWeatherJson.SetCityName(city);
+                cityWeatherJson.SetCountryName(country);
 
-            //Get long and lat and add to CityWeather class
-            var stringResultLocation = await responseLocation.Content.ReadAsStringAsync();
-            var dataLocation = JArray.Parse(stringResultLocation);
-            cityWeatherJson.SetLatitude(double.Parse(dataLocation[0]["latitude"].ToString()));
-            cityWeatherJson.SetLongitude(double.Parse(dataLocation[0]["longitude"].ToString()));
+                //Get long and lat and add to CityWeather class
+                var stringResultLocation = await responseLocation.Content.ReadAsStringAsync();
+                var dataLocation = JArray.Parse(stringResultLocation);
+                cityWeatherJson.SetLatitude(double.Parse(dataLocation[0]["latitude"].ToString()));
+                cityWeatherJson.SetLongitude(double.Parse(dataLocation[0]["longitude"].ToString()));
 
-            //Add to database and save
-            context.Weathers.Add(cityWeatherJson);
-            context.SaveChanges();
+                //Add to database and save
+                context.Weathers.Add(cityWeatherJson);
+                context.SaveChanges();
 
-            //Add to ListBox, Chart and Map
-            CitiesListChanged(cityWeatherJson);
-            AddNewCityToTempChart(cityWeatherJson, city);
-            AddWeatherMarkers(cityWeatherJson);
+                //Add to ListBox, Chart and Map
+                CitiesListChanged(cityWeatherJson);
+                AddNewCityToTempChart(cityWeatherJson, city);
+                AddWeatherMarkers(cityWeatherJson);
 
-            //Clear Inputs
-            CityInput.Clear();
-            CountryInput.Clear();
+                //Clear Inputs
+                CityInput.Clear();
+                CountryInput.Clear();
+            }
+            catch (HttpRequestException ex)
+            {
+                // Display the error message in the form
+                MessageBox.Show("An error occurred while making the API request: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (JsonException ex)
+            {
+                        // Display the error message in the form
+                        MessageBox.Show("An error occurred while parsing the JSON response: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+            catch (Exception ex)
+            {
+                // Display the generic error message in the form
+                MessageBox.Show("An error occurred: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void LoadDb()

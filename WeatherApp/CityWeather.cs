@@ -1,6 +1,6 @@
 ﻿namespace WeatherApp
 {
-    public class CityWeather
+    public class WeatherCity
     {
         public int ID { get; set; }
         public int cloud_pct { get; set; }

@@ -10,6 +10,6 @@ namespace WeatherApp
 {
     public class CityWeathers : System.Data.Entity.DbContext
     {
-        public virtual System.Data.Entity.DbSet<CityWeather> Weathers { get; set; }
+        public virtual System.Data.Entity.DbSet<CityWeather> Weather { get; set; }
     }
 }
